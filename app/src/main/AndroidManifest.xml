@@ -1,9 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="com.LRTNZ.testvlcapplication">
+  package="com.LRTNZ.SimpleUSBPlayout">
 
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-feature android:name="android.software.leanback" android:required="true"/>
   <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
 
   <application
     android:allowBackup="true"
@@ -14,11 +16,13 @@
     android:theme="@style/AppTheme">
 
     <activity
-      android:name="App"
+      android:name="com.LRTNZ.SimpleUSBPlayout.App"
       android:configChanges="keyboard|keyboardHidden|navigation"
-      android:label="Test VLC App"
+      android:label="Simple USB Playout"
       android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
-      android:launchMode="singleInstance">
+      android:launchMode="singleInstance"
+      android:clearTaskOnLaunch="true">
+
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>

@@ -1,2 +1,2 @@
 include ':app'
-rootProject.name='Test VLC Application'
+rootProject.name='Simple USB Playout'

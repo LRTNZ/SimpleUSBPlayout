@@ -1,18 +1,23 @@
-package com.LRTNZ.testvlcapplication;
+package com.LRTNZ.SimpleUSBPlayout;
 
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.util.DisplayMetrics;
 import android.view.KeyEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
+import android.webkit.MimeTypeMap;
 import android.widget.EditText;
+import androidx.core.content.ContextCompat;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -89,13 +94,15 @@ public class App extends Activity implements IVLCVout.Callback{
     add("udp://@239.1.1.1:1234");
   }};
 
-  ArrayList<String> videoFiles = new ArrayList<String>(){{
-    add("resort_flyover.mp4");
-    add("waves_crashing.mp4");
-  }};
+  ArrayList<String> videoFiles = new ArrayList<String>();//{{
+  //  add("resort_flyover.mp4");
+   // add("waves_crashing.mp4");
+   // add("happy-test.jpg");
+  //  add("Test-Logo.png");
+ // }};
 
 
-  static boolean streamOrFile = true;
+  static boolean streamOrFile = false;
 
   static int numPlaybacks = 0;
 
@@ -124,6 +131,24 @@ public class App extends Activity implements IVLCVout.Callback{
     vidSurface.setVisibility(View.VISIBLE);
     vidHolder = vidSurface.getHolder();
 
+
+    String baseFilePath;
+    if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)){
+      baseFilePath = Environment.getExternalStorageDirectory().getAbsolutePath();
+      File usbFiles[] = Environment.getExternalStorageDirectory().listFiles();
+      Timber.d(Environment.getExternalStorageDirectory().list().toString());
+      for(int i = 0; i <usbFiles.length; i++){
+        String fileType = MimeTypeMap.getFileExtensionFromUrl(usbFiles[i].getAbsolutePath());
+
+        // Clever solution
+        ///https://stackoverflow.com/questions/7604814/best-way-to-format-multiple-or-conditions-in-an-if-statement
+        if(Arrays.asList("mp4", "jpeg", "png").contains(fileType)){
+          videoFiles.add(usbFiles[i].getAbsolutePath());
+        }
+      }
+    }
+
+
     // Adds arguments to the list of args to pass when initialising the lib VLC instance.
     // If you need to add in more arguments to the vlc instance, just follow the format below
 
@@ -132,14 +157,15 @@ public class App extends Activity implements IVLCVout.Callback{
     // |-----------------------------|
 
     addArg("fullscreen", "--fullscreen");
-    addArg("verbose", "-vvv");
+    addArg("decode", ":codec=mediacodec_ndk,mediacodec_jni,none");
+    addArg("verbose", "-v");
 
   //  addArg("deinterlace", "--deinterlace=1");
     //addArg("mode","--deinterlace-mode=yadif");
    // addArg("filter","--video-filter=deinterlace");
 
     // Load the editText variable with a reference to what it needs to fill in the layout
-    streamName = findViewById(R.id.stream_ID);
+   // streamName = findViewById(R.id.stream_ID);
 
     // Run the libVLC creation/init method
     createLibVLC();
@@ -218,6 +244,7 @@ public class App extends Activity implements IVLCVout.Callback{
           break;
         case MediaPlayer.Event.Stopped:
           Timber.d("onEvent: Stopped");
+          changeStream();
           break;
         case MediaPlayer.Event.TimeChanged:
           //  Timber.d("onEvent: TimeChanged");
@@ -240,7 +267,7 @@ public class App extends Activity implements IVLCVout.Callback{
     // |------------------------------------|
 
      runAutomaticTimer = true;
-     runTimedStreamChange();
+     //runTimedStreamChange();
   }
 
 
@@ -302,8 +329,15 @@ public class App extends Activity implements IVLCVout.Callback{
 
   @Override
   public void onPause() {
+    super.onStop();
+    mediaPlayer.stop();
+    runAutomaticTimer = false;
+    mediaPlayer.getVLCVout().detachViews();
+    mediaPlayer.getVLCVout().removeCallback(this);
+    mediaPlayer.release();
     super.onPause();
     Timber.d("App ran paused");
+    finish();
   }
 
   @Override
@@ -311,12 +345,14 @@ public class App extends Activity implements IVLCVout.Callback{
     super.onStop();
 
     // Release the various VLC things when the activity is stopped
-    mediaPlayer.stop();
-    runAutomaticTimer = false;
-    mediaPlayer.getVLCVout().detachViews();
-    mediaPlayer.getVLCVout().removeCallback(this);
+//    mediaPlayer.stop();
+ //   runAutomaticTimer = false;
+ //   mediaPlayer.getVLCVout().detachViews();
+ //   mediaPlayer.getVLCVout().removeCallback(this);
+ //   mediaPlayer.release();
 
     Timber.d("Player ran stop");
+    finish();
   }
 
 
@@ -328,19 +364,19 @@ public class App extends Activity implements IVLCVout.Callback{
   /**
    * Method that can be called to start a timer to automatically change the stream every 10 seconds from inside the application.
    */
-  void runTimedStreamChange(){
+ // void runTimedStreamChange(){
 
-    Timer timer = new Timer();
-    timer.scheduleAtFixedRate(new TimerTask() {
-      @Override
-      public void run() {
-        if(!runAutomaticTimer){
-          this.cancel();
-        }
-        runOnUiThread(() -> changeStream());
-      }
-    }, 5000, 10000);
-  }
+    //Timer timer = new Timer();
+   // timer.scheduleAtFixedRate(new TimerTask() {
+     // @Override
+     // public void run() {
+     //   if(!runAutomaticTimer){
+      //    this.cancel();
+      //  }
+      //  runOnUiThread(() -> changeStream());
+      //}
+  //  }, 5000, 15000);
+  //}
 
 
   /**
@@ -378,7 +414,7 @@ public class App extends Activity implements IVLCVout.Callback{
     }
 
     // Load the values of the current stream and index into the textbox at the top of the screen, to make it easier to see what is happening
-    streamName.setText(String.format("Stream: %s/%s", currentStreamIndex,currentStreamAddress));
+  //  streamName.setText(String.format("Stream: %s/%s", currentStreamIndex,currentStreamAddress));
 
     // If the current media source is not null, as it would be at start up, release it.
     if (mediaSource != null) {
