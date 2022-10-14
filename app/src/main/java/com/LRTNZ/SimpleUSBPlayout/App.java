@@ -116,6 +116,9 @@ public class App extends Activity implements IVLCVout.Callback{
   @Override
   protected void onCreate(Bundle savedInstance){
 
+    Toast toast = Toast.makeText(this, "Called on create", Toast.LENGTH_SHORT);
+    toast.show();
+
     // Run the super stuff for this method
     super.onCreate(savedInstance);
 
@@ -164,8 +167,11 @@ public class App extends Activity implements IVLCVout.Callback{
       //Timber.d(Environment.getExternalStorageDirectory().list().toString());
       if (usbFiles != null) {
         for(int i = 0; i <usbFiles.length; i++){
-          String fileType = MimeTypeMap.getFileExtensionFromUrl(usbFiles[i].getAbsolutePath());
 
+          // https://stackoverflow.com/questions/45796234/mimetypemap-fail-to-return-extension-for-a-filename-that-contains-spaces
+          //https://stackoverflow.com/questions/5455794/removing-whitespace-from-strings-in-java
+          String fileType = MimeTypeMap.getFileExtensionFromUrl(usbFiles[i].getAbsolutePath().replaceAll("\\s+", ""));
+          Timber.d("File type: " + fileType);
           // Clever solution
           ///https://stackoverflow.com/questions/7604814/best-way-to-format-multiple-or-conditions-in-an-if-statement
           if(Arrays.asList("mp4", "jpeg", "png").contains(fileType)){
@@ -173,7 +179,7 @@ public class App extends Activity implements IVLCVout.Callback{
           }
         }
       } else {
-        Toast toast = Toast.makeText(this, "Failed to read usb", Toast.LENGTH_SHORT);
+        toast = Toast.makeText(this, "Failed to read usb", Toast.LENGTH_SHORT);
         toast.show();
       }
     }
@@ -359,32 +365,36 @@ public class App extends Activity implements IVLCVout.Callback{
 
   @Override
   public void onPause() {
-    super.onStop();
-    mediaPlayer.stop();
-    runAutomaticTimer = false;
-    mediaPlayer.getVLCVout().detachViews();
-    mediaPlayer.getVLCVout().removeCallback(this);
-    mediaPlayer.release();
     super.onPause();
+
+    runAutomaticTimer = false;
+
+    //vlcOut.removeCallback(this);
     Timber.d("App ran paused");
-    finish();
   }
 
   @Override
   public void onStop() {
     super.onStop();
-
+    mediaPlayer.stop();
+    vlcOut.detachViews();
     // Release the various VLC things when the activity is stopped
 //    mediaPlayer.stop();
- //   runAutomaticTimer = false;
- //   mediaPlayer.getVLCVout().detachViews();
- //   mediaPlayer.getVLCVout().removeCallback(this);
- //   mediaPlayer.release();
+    //   runAutomaticTimer = false;
+    //   mediaPlayer.getVLCVout().detachViews();
+    //   mediaPlayer.getVLCVout().removeCallback(this);
+    //   mediaPlayer.release();
 
     Timber.d("Player ran stop");
-    finish();
   }
 
+  @Override
+  public void onDestroy(){
+    Timber.d("Player destroyed");
+    super.onDestroy();
+    mediaPlayer.release();
+    libVLC.release();
+  }
 
   /**
    * {@link Boolean} value that stores whether or not the automatic timer should cancel, once it has been set going
@@ -414,38 +424,15 @@ public class App extends Activity implements IVLCVout.Callback{
    */
   void changeStream(){
 
-    // If the current stream being played is the first
-    if(currentStreamIndex == 0){
-
-      currentStreamIndex = 1;
-
-      if(streamOrFile){
-        Timber.d("Selected Stream: 1");
-        currentStreamAddress = streamAddresses.get(1);
-
-      } else {
-        Timber.d("Selected Video: 1 - %s", videoFiles.get(1));
-        currentStreamAddress = videoFiles.get(1);
-      }
-
-      // Perform the inverse if the second stream is currently playing
+    if(currentStreamIndex < videoFiles.size()){
+      currentStreamAddress = videoFiles.get(currentStreamIndex);
+      currentStreamIndex ++;
     } else {
-
       currentStreamIndex = 0;
-
-      if(streamOrFile){
-        Timber.d("Selected Stream: 0");
-        if(videoFiles.size() > 0) {
-          currentStreamAddress = streamAddresses.get(0);
-        }
-
-      } else {
-        if(videoFiles.size() > 0) {
-          Timber.d("Selected Video: 0 - %s", videoFiles.get(0));
-          currentStreamAddress = videoFiles.get(0);
-        }
-      }
+      currentStreamAddress = videoFiles.get(currentStreamIndex);
     }
+   // Timber.d("Selected File: 0 - %s", videoFiles.get(currentStreamIndex));
+    Timber.d(currentStreamAddress);
 
     // Load the values of the current stream and index into the textbox at the top of the screen, to make it easier to see what is happening
   //  streamName.setText(String.format("Stream: %s/%s", currentStreamIndex,currentStreamAddress));
@@ -464,11 +451,9 @@ public class App extends Activity implements IVLCVout.Callback{
     //    mediaSource = new Media(this.libVLC, fd);
         mediaSource = new Media(this.libVLC, Uri.parse("file:///" + this.currentStreamAddress));
         mediaSource.setHWDecoderEnabled(true, false);
-   //   } catch (IOException e) {
-        //e.printStackTrace();
-     // }
+
     }
-    //mediaSource.setHWDecoderEnabled(true, true);
+
 
     // Finish up the process of loading the stream into the player
     finishPlayer();
@@ -509,117 +494,6 @@ public class App extends Activity implements IVLCVout.Callback{
 
   @Override
   public void onSurfacesDestroyed(IVLCVout ivlcVout) {
-
-  }
-
-
-
-  /**
-   * {@link Boolean} value that stores whether button inputs are to be observed or not at the current time by the app.
-   */
-  volatile boolean buttonLockout = false;
-
-  /**
-   * Enum that represents the direction the channel change button on the remote was pressed
-   */
-  private enum directionPressedEnum{
-    STREAM_UP,
-    STREAM_DOWN
-  }
-
-  boolean pressedOnce = false;
-  boolean secondPress = false;
-  /**
-   * Stores the curremt {@link directionPressedEnum} of what button direction was last pushed
-   */
-  static directionPressedEnum directionPressed = null;
-
-  @Override
-  public boolean onKeyDown(int keyCode, KeyEvent event) {
-    // Debug: Log that a button that can be read in by the program has been pressed
-    Timber.v("Remote button was pressed");
-
-    // If the app is to observe the button presses or not. Required due to the fact the TV this is being tested on (Sony Bravia) likes to sometimes read in extraneous button presses that are non existent.
-    if(!buttonLockout){
-
-      // If the button pressed was the channel up
-      if(keyCode == KeyEvent.KEYCODE_CHANNEL_UP){
-
-        // Debug
-        Timber.d("Channel up pressed");
-
-        // If the direction that was last pressed was down/app is starting
-        if(directionPressed == directionPressedEnum.STREAM_DOWN || directionPressed == null){
-
-
-          Timber.d("First up press");
-
-          // Set the direction that has been pressed, and that the channel button has been pressed once
-          directionPressed = directionPressedEnum.STREAM_UP;
-          pressedOnce = true;
-
-          // Otherwise if the last press was already in this direction
-        } else if(directionPressed == directionPressedEnum.STREAM_UP && pressedOnce){
-          Timber.d("Second up press");
-
-          // Button being pressed for a second time, so lock out taking in any more inputs
-          secondPress = true;
-          buttonLockout = true;
-        }
-
-        // Same as above, just for the channel down key on the remote
-      } else if(keyCode == KeyEvent.KEYCODE_CHANNEL_DOWN){
-
-        Timber.d("Channel down pressed");
-        if(directionPressed == directionPressedEnum.STREAM_UP || directionPressed == null){
-
-          Timber.d("First down press");
-          directionPressed = directionPressedEnum.STREAM_DOWN;
-          pressedOnce = true;
-        } else if(directionPressed == directionPressedEnum.STREAM_DOWN && pressedOnce){
-          Timber.d("Second down press");
-          secondPress = true;
-          buttonLockout = true;
-        }
-
-        // Catches other button presses that the program has received
-      } else {
-        Timber.d("Other button press");
-        //return super.onKeyDown(keyCode, event);
-      }
-
-      // If the button has been pressed for a second time, and the button input has been locked out
-      if(secondPress && buttonLockout){
-        Timber.d("Change stream called");
-
-        // Reset variables
-        pressedOnce = false;
-        secondPress = false;
-
-        // Call the stream change
-        changeStream();
-
-        // Call the handler to reset the lockout after a timeout
-        handleButtonLockout();
-      }
-
-      // Return true to stop the OS pulling you out of this app on any button press
-      return true;
-    }
-
-    // return true so any buttons read in that the program doesn't handle, doesn't close the program
-    return true;
-  }
-
-  /**
-   * Handler to reset the {@link #buttonLockout} value after a timeout period
-   */
-  void handleButtonLockout(){
-
-    // Create new Handler
-    Handler handler = new Handler();
-    // Run this runnable after a second
-    handler.postDelayed(() -> buttonLockout = false, 1000);
 
   }
 
