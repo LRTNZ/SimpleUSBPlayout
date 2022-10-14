@@ -46,8 +46,10 @@ android {
 
 
 dependencies {
-    implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation fileTree(dir: 'libs', include: ['*.aar'])
+    implementation 'org.videolan.android:libvlc-all:4.0.0-eap3'
+    implementation 'androidx.appcompat:appcompat:1.2.0'
+    //implementation fileTree(dir: 'libs', include: ['*.jar'])
+    //implementation fileTree(dir: 'libs', include: ['*.aar'])
     implementation 'androidx.leanback:leanback:1.0.0'
     // Logging tool wrapper used in the app, instead of the default logger.
     implementation 'com.jakewharton.timber:timber:4.7.1'

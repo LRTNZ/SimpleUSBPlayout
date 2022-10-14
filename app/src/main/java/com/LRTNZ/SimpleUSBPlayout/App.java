@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
@@ -26,12 +27,14 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 import org.jetbrains.annotations.NotNull;
 import org.videolan.libvlc.LibVLC;
 import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
+import org.videolan.libvlc.interfaces.IMedia;
 import org.videolan.libvlc.interfaces.IVLCVout;
 import timber.log.Timber;
 
@@ -77,7 +80,7 @@ public class App extends Activity implements IVLCVout.Callback{
   /**
    * {@link String} value of the network address of the current streaming source to be played back
    */
-  String currentStreamAddress = "";
+  String currentStreamAddress = " ";
 
   // Text box at the top of the screen, that will have the current stream name/index being played in it, to make it easy to see what is happening in the application
 
@@ -101,7 +104,7 @@ public class App extends Activity implements IVLCVout.Callback{
     add("udp://@239.1.1.1:1234");
   }};
 
-  ArrayList<String> videoFiles = new ArrayList<String>();//{{
+  ArrayList<String[]> videoFiles = new ArrayList<String[]>();//{{
   //  add("resort_flyover.mp4");
    // add("waves_crashing.mp4");
    // add("happy-test.jpg");
@@ -109,18 +112,30 @@ public class App extends Activity implements IVLCVout.Callback{
  // }};
 
 
-  static boolean streamOrFile = false;
-
   static int numPlaybacks = 0;
+
+
+  @Override
+  public void startActivityForResult(Intent intent, int requestCode) {
+    if (intent == null) {
+      intent = new Intent();
+    }
+    super.startActivityForResult(intent, requestCode);
+  }
 
   @Override
   protected void onCreate(Bundle savedInstance){
+
+    super.onCreate(savedInstance);
+    Log.e("STARTING", "Finally freaking starting");
 
     Toast toast = Toast.makeText(this, "Called on create", Toast.LENGTH_SHORT);
     toast.show();
 
     // Run the super stuff for this method
-    super.onCreate(savedInstance);
+
+
+    keepRunning = true;
 
     // Creates the timber debug output, and sets the tag for the log messages
     if (BuildConfig.DEBUG) {
@@ -142,6 +157,7 @@ public class App extends Activity implements IVLCVout.Callback{
     setContentView(R.layout.main);
 
     // Populates and loads the two values for the video layout stuff
+    setContentView(R.layout.main);
     vidSurface = findViewById(R.id.video_layout);
     vidSurface.setVisibility(View.VISIBLE);
     vidHolder = vidSurface.getHolder();
@@ -175,9 +191,14 @@ public class App extends Activity implements IVLCVout.Callback{
           // Clever solution
           ///https://stackoverflow.com/questions/7604814/best-way-to-format-multiple-or-conditions-in-an-if-statement
           if(Arrays.asList("mp4", "jpeg", "png").contains(fileType)){
-            videoFiles.add(usbFiles[i].getAbsolutePath());
+            videoFiles.add(new String[]{usbFiles[i].getAbsolutePath(), fileType});
           }
         }
+
+        for(int i = 0; i < videoFiles.size(); i++){
+          Timber.d("File index: %s", videoFiles.get(i)[0]);
+        }
+
       } else {
         toast = Toast.makeText(this, "Failed to read usb", Toast.LENGTH_SHORT);
         toast.show();
@@ -218,11 +239,11 @@ public class App extends Activity implements IVLCVout.Callback{
     // Debug: Print out the passed in arguments
     Timber.d("Arguments for VLC: %s", args);
 
-    // Create the LibVLC instance, with the provided arguments
+    // Create the LibVLC instance, with the provided  arguments
     libVLC = new LibVLC(this, args);
 
     // Create the new media player instance to be used
-    mediaPlayer = new org.videolan.libvlc.MediaPlayer(libVLC);
+    mediaPlayer = new MediaPlayer(libVLC);
 
     // Get the details of the display
     DisplayMetrics displayMetrics = new DisplayMetrics();
@@ -280,7 +301,9 @@ public class App extends Activity implements IVLCVout.Callback{
           break;
         case MediaPlayer.Event.Stopped:
           Timber.d("onEvent: Stopped");
-          changeStream();
+          if(keepRunning){
+            changeStream();
+          }
           break;
         case MediaPlayer.Event.TimeChanged:
           //  Timber.d("onEvent: TimeChanged");
@@ -294,16 +317,6 @@ public class App extends Activity implements IVLCVout.Callback{
     // Call the change stream, to preload the first stream at startup, instead of waiting for an input
     changeStream();
 
-    // If you do not have the means to automatically generate an alternative two pulse up/two pulse down signal input for the Android TV,
-    // these two lines can be uncommented in order to enable the automatic up/down changing.
-    // The reason there are the two input options, is to prove it is not the source of the call to changing the stream that is causing the issues with the crashing.
-
-    // |------------------------------------|
-    // | Optional automatic stream changing |
-    // |------------------------------------|
-
-     runAutomaticTimer = true;
-     //runTimedStreamChange();
   }
 
 
@@ -346,7 +359,6 @@ public class App extends Activity implements IVLCVout.Callback{
 
     // Run super stuff
     super.onStart();
-
     // Set the output view to use for the video to be the surface
     vlcOut.setVideoView(vidSurface);
 
@@ -366,9 +378,7 @@ public class App extends Activity implements IVLCVout.Callback{
   @Override
   public void onPause() {
     super.onPause();
-
-    runAutomaticTimer = false;
-
+    mediaPlayer.stop();
     //vlcOut.removeCallback(this);
     Timber.d("App ran paused");
   }
@@ -376,83 +386,62 @@ public class App extends Activity implements IVLCVout.Callback{
   @Override
   public void onStop() {
     super.onStop();
-    mediaPlayer.stop();
-    vlcOut.detachViews();
-    // Release the various VLC things when the activity is stopped
-//    mediaPlayer.stop();
-    //   runAutomaticTimer = false;
-    //   mediaPlayer.getVLCVout().detachViews();
-    //   mediaPlayer.getVLCVout().removeCallback(this);
-    //   mediaPlayer.release();
+    keepRunning = false;
+    //mediaPlayer.detachViews();
+    mediaPlayer.getVLCVout().detachViews();
+    mediaPlayer.getVLCVout().removeCallback(this);
 
-    Timber.d("Player ran stop");
+    mediaPlayer.release();
+    libVLC.release();
+    mediaPlayer = null;
+    libVLC = null;
+    vidHolder = null;
+    Timber.d("Player ran stop  ");
+    onDestroy();
   }
 
   @Override
   public void onDestroy(){
-    Timber.d("Player destroyed");
     super.onDestroy();
-    mediaPlayer.release();
-    libVLC.release();
+    Timber.d("Player destroyed");
+    android.os.Process.killProcess(android.os.Process.myPid());
   }
 
-  /**
-   * {@link Boolean} value that stores whether or not the automatic timer should cancel, once it has been set going
-   */
-  volatile boolean runAutomaticTimer = false;
 
-  /**
-   * Method that can be called to start a timer to automatically change the stream every 10 seconds from inside the application.
-   */
- // void runTimedStreamChange(){
-
-    //Timer timer = new Timer();
-   // timer.scheduleAtFixedRate(new TimerTask() {
-     // @Override
-     // public void run() {
-     //   if(!runAutomaticTimer){
-      //    this.cancel();
-      //  }
-      //  runOnUiThread(() -> changeStream());
-      //}
-  //  }, 5000, 15000);
-  //}
 
 
   /**
    * Method that is called to change the multicast stream VLC is currently playing
    */
   void changeStream(){
+    String format = videoFiles.get(currentStreamIndex)[1];
+    Timber.d("Media Format: " + format);
+    Timber.d("Current Index: " + currentStreamIndex);
+    if(currentStreamIndex < 4){//videoFiles.size()){
 
-    if(currentStreamIndex < videoFiles.size()){
-      currentStreamAddress = videoFiles.get(currentStreamIndex);
+      currentStreamAddress = videoFiles.get(currentStreamIndex)[0];
       currentStreamIndex ++;
     } else {
       currentStreamIndex = 0;
-      currentStreamAddress = videoFiles.get(currentStreamIndex);
+      currentStreamAddress = videoFiles.get(currentStreamIndex)[0];
+      currentStreamIndex++;
     }
    // Timber.d("Selected File: 0 - %s", videoFiles.get(currentStreamIndex));
     Timber.d(currentStreamAddress);
-
-    // Load the values of the current stream and index into the textbox at the top of the screen, to make it easier to see what is happening
-  //  streamName.setText(String.format("Stream: %s/%s", currentStreamIndex,currentStreamAddress));
 
     // If the current media source is not null, as it would be at start up, release it.
     if (mediaSource != null) {
       mediaSource.release();
     }
 
-    if(streamOrFile){
-      mediaSource = new Media(this.libVLC, Uri.parse(this.currentStreamAddress));
-    } else {
-     // try {
-      //  FileDescriptor fd;
-     //   fd = getContentResolver().openFileDescriptor(Uri.parse("file:///" + this.currentStreamAddress), "r").getFileDescriptor();
-    //    mediaSource = new Media(this.libVLC, fd);
         mediaSource = new Media(this.libVLC, Uri.parse("file:///" + this.currentStreamAddress));
-        mediaSource.setHWDecoderEnabled(true, false);
-
-    }
+        mediaSource.addOption(":no-mediacodec-dr");
+        mediaSource.addOption(":no-omxil-dr");
+        if(format.equals("mp4")) {
+          Timber.i("Format is mp4");
+          mediaSource.setHWDecoderEnabled(true, true);
+          mediaSource.addOption(":codec=mediacodec_ndk,mediacodec_jni,none");
+        }
 
 
     // Finish up the process of loading the stream into the player
@@ -462,7 +451,13 @@ public class App extends Activity implements IVLCVout.Callback{
   /**
    * Method that is called to load in a new mediasource and to set it playing out the output, from VLC
    */
+
+  boolean keepRunning = true;
   void finishPlayer(){
+
+    if(!keepRunning){
+      return;
+    }
 
     if(mediaPlayer.isPlaying()){
       mediaPlayer.stop();
@@ -475,11 +470,11 @@ public class App extends Activity implements IVLCVout.Callback{
     // Set the player to use the provided media source
     mediaPlayer.setMedia(mediaSource);
 
-    // Release the media source
-    mediaSource.release();
-
     // Start the media player
     mediaPlayer.play();
+
+    // Release the media source
+    mediaSource.release();
 
     Timber.d("Number of playbacks: %s", numPlaybacks);
     numPlaybacks ++;

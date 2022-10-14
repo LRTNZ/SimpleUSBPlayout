@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
   package="com.LRTNZ.SimpleUSBPlayout">
 
   <uses-permission android:name="android.permission.INTERNET"/>
@@ -7,6 +8,7 @@
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
   <uses-feature android:name="android.software.leanback" android:required="true" />
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
   <application
     android:allowBackup="true"
     android:icon="@drawable/ic_launcher"
@@ -14,7 +16,7 @@
     android:banner="@drawable/ic_launcher"
     android:logo="@drawable/ic_launcher"
     android:supportsRtl="true"
-    android:theme="@style/AppTheme"
+    android:theme="@style/Theme.AppCompat"
       android:requestLegacyExternalStorage="true">
 
     <activity
@@ -22,10 +24,10 @@
       android:icon="@drawable/ic_launcher"
       android:banner="@drawable/ic_launcher"
       android:logo="@drawable/ic_launcher"
-      android:configChanges="keyboard|keyboardHidden|navigation"
+      android:configChanges="keyboard|keyboardHidden|navigation|orientation"
       android:label="Simple USB Playout"
-      android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
-      android:launchMode="singleInstance"
+      android:theme="@style/Theme.Leanback"
+      android:launchMode="singleTask"
         android:alwaysRetainTaskState="false"
       android:clearTaskOnLaunch="true"
         android:exported="true">
