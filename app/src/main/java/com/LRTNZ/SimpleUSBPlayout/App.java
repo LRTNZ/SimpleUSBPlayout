@@ -1,7 +1,9 @@
 package com.LRTNZ.SimpleUSBPlayout;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -13,9 +15,14 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.webkit.MimeTypeMap;
 import android.widget.EditText;
+import android.widget.Toast;
+
+import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import java.io.File;
+import java.io.FileDescriptor;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -123,6 +130,11 @@ public class App extends Activity implements IVLCVout.Callback{
       Timber.d("In debug mode");
     }
 
+
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+      ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+    }
+
     // Sets the main view
     setContentView(R.layout.main);
 
@@ -132,19 +144,37 @@ public class App extends Activity implements IVLCVout.Callback{
     vidHolder = vidSurface.getHolder();
 
 
-    String baseFilePath;
+    File baseFilePath;
     if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)){
-      baseFilePath = Environment.getExternalStorageDirectory().getAbsolutePath();
-      File usbFiles[] = Environment.getExternalStorageDirectory().listFiles();
-      Timber.d(Environment.getExternalStorageDirectory().list().toString());
-      for(int i = 0; i <usbFiles.length; i++){
-        String fileType = MimeTypeMap.getFileExtensionFromUrl(usbFiles[i].getAbsolutePath());
+      File tempPath = new File("/mnt/usb/");
+      baseFilePath = tempPath.listFiles()[0];
 
-        // Clever solution
-        ///https://stackoverflow.com/questions/7604814/best-way-to-format-multiple-or-conditions-in-an-if-statement
-        if(Arrays.asList("mp4", "jpeg", "png").contains(fileType)){
-          videoFiles.add(usbFiles[i].getAbsolutePath());
+      Timber.d(baseFilePath.toString());
+      File[] usbFiles = baseFilePath.listFiles();
+      Timber.d(String.valueOf(usbFiles.length));
+      for (int i = 0; i < usbFiles.length; i++) {
+        if (usbFiles[i].isFile()) {
+          Timber.d("File " + usbFiles[i].getName());
+        } else if (usbFiles[i].isDirectory()) {
+          Timber.d("Directory " + usbFiles[i].getName());
         }
+      }
+
+
+      //Timber.d(Environment.getExternalStorageDirectory().list().toString());
+      if (usbFiles != null) {
+        for(int i = 0; i <usbFiles.length; i++){
+          String fileType = MimeTypeMap.getFileExtensionFromUrl(usbFiles[i].getAbsolutePath());
+
+          // Clever solution
+          ///https://stackoverflow.com/questions/7604814/best-way-to-format-multiple-or-conditions-in-an-if-statement
+          if(Arrays.asList("mp4", "jpeg", "png").contains(fileType)){
+            videoFiles.add(usbFiles[i].getAbsolutePath());
+          }
+        }
+      } else {
+        Toast toast = Toast.makeText(this, "Failed to read usb", Toast.LENGTH_SHORT);
+        toast.show();
       }
     }
 
@@ -405,11 +435,15 @@ public class App extends Activity implements IVLCVout.Callback{
 
       if(streamOrFile){
         Timber.d("Selected Stream: 0");
-        currentStreamAddress = streamAddresses.get(0);
+        if(videoFiles.size() > 0) {
+          currentStreamAddress = streamAddresses.get(0);
+        }
 
       } else {
-        Timber.d("Selected Video: 0 - %s", videoFiles.get(0));
-        currentStreamAddress = videoFiles.get(0);
+        if(videoFiles.size() > 0) {
+          Timber.d("Selected Video: 0 - %s", videoFiles.get(0));
+          currentStreamAddress = videoFiles.get(0);
+        }
       }
     }
 
@@ -424,11 +458,15 @@ public class App extends Activity implements IVLCVout.Callback{
     if(streamOrFile){
       mediaSource = new Media(this.libVLC, Uri.parse(this.currentStreamAddress));
     } else {
-      try {
-        mediaSource = new Media(this.libVLC, getAssets().openFd(this.currentStreamAddress));
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
+     // try {
+      //  FileDescriptor fd;
+     //   fd = getContentResolver().openFileDescriptor(Uri.parse("file:///" + this.currentStreamAddress), "r").getFileDescriptor();
+    //    mediaSource = new Media(this.libVLC, fd);
+        mediaSource = new Media(this.libVLC, Uri.parse("file:///" + this.currentStreamAddress));
+        mediaSource.setHWDecoderEnabled(true, false);
+   //   } catch (IOException e) {
+        //e.printStackTrace();
+     // }
     }
     //mediaSource.setHWDecoderEnabled(true, true);
 
