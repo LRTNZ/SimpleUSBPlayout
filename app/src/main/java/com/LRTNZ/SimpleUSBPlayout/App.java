@@ -129,8 +129,8 @@ public class App extends Activity implements IVLCVout.Callback{
     super.onCreate(savedInstance);
     Log.e("STARTING", "Finally freaking starting");
 
-    Toast toast = Toast.makeText(this, "Called on create", Toast.LENGTH_SHORT);
-    toast.show();
+   // Toast toast = Toast.makeText(this, "Called on create", Toast.LENGTH_SHORT);
+   // toast.show();
 
     // Run the super stuff for this method
 
@@ -200,8 +200,8 @@ public class App extends Activity implements IVLCVout.Callback{
         }
 
       } else {
-        toast = Toast.makeText(this, "Failed to read usb", Toast.LENGTH_SHORT);
-        toast.show();
+       // toast = Toast.makeText(this, "Failed to read usb", Toast.LENGTH_SHORT);
+        //toast.show();
       }
     }
 
@@ -315,7 +315,7 @@ public class App extends Activity implements IVLCVout.Callback{
     });
 
     // Call the change stream, to preload the first stream at startup, instead of waiting for an input
-    changeStream();
+
 
   }
 
@@ -367,6 +367,10 @@ public class App extends Activity implements IVLCVout.Callback{
     // Attach the video views passed to the output
     vlcOut.attachViews();
 
+    // Prepare the first piece of media
+    prepareMedia();
+    // Start playing out the media
+    changeStream();
   }
 
   @Override
@@ -408,16 +412,11 @@ public class App extends Activity implements IVLCVout.Callback{
   }
 
 
-
-
-  /**
-   * Method that is called to change the multicast stream VLC is currently playing
-   */
-  void changeStream(){
+  void prepareMedia(){
     String format = videoFiles.get(currentStreamIndex)[1];
     Timber.d("Media Format: " + format);
     Timber.d("Current Index: " + currentStreamIndex);
-    if(currentStreamIndex < 4){//videoFiles.size()){
+    if(currentStreamIndex < (videoFiles.size() -1)){
 
       currentStreamAddress = videoFiles.get(currentStreamIndex)[0];
       currentStreamIndex ++;
@@ -426,7 +425,7 @@ public class App extends Activity implements IVLCVout.Callback{
       currentStreamAddress = videoFiles.get(currentStreamIndex)[0];
       currentStreamIndex++;
     }
-   // Timber.d("Selected File: 0 - %s", videoFiles.get(currentStreamIndex));
+    // Timber.d("Selected File: 0 - %s", videoFiles.get(currentStreamIndex));
     Timber.d(currentStreamAddress);
 
     // If the current media source is not null, as it would be at start up, release it.
@@ -434,18 +433,26 @@ public class App extends Activity implements IVLCVout.Callback{
       mediaSource.release();
     }
 
-        mediaSource = new Media(this.libVLC, Uri.parse("file:///" + this.currentStreamAddress));
-        mediaSource.addOption(":no-mediacodec-dr");
-        mediaSource.addOption(":no-omxil-dr");
-        if(format.equals("mp4")) {
-          Timber.i("Format is mp4");
-          mediaSource.setHWDecoderEnabled(true, true);
-          mediaSource.addOption(":codec=mediacodec_ndk,mediacodec_jni,none");
-        }
+    mediaSource = new Media(this.libVLC, Uri.parse("file:///" + this.currentStreamAddress));
+    mediaSource.addOption(":no-mediacodec-dr");
+    mediaSource.addOption(":no-omxil-dr");
+    if(format.equals("mp4")) {
+      Timber.i("Format is mp4");
+      mediaSource.setHWDecoderEnabled(true, true);
+      mediaSource.addOption(":codec=mediacodec_ndk,mediacodec_jni,none");
+    }
+  }
 
+  /**
+   * Method that is called to change the multicast stream VLC is currently playing
+   */
+  void changeStream(){
 
     // Finish up the process of loading the stream into the player
     finishPlayer();
+
+    // Prepares the next piece of media
+    prepareMedia();
   }
 
   /**
